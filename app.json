@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "manjula-milk-forming",
+    "name": "Manjula Milk Forming",
     "slug": "manjula-milk-forming",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1F4D1C"
     },
     "ios": {
       "supportsTablet": true
@@ -18,12 +18,21 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1F4D1C"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.manjulamilkforming.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ec8e95cc-4c09-4992-8a82-a07d9132bfb7"
+      }
     }
   }
 }
