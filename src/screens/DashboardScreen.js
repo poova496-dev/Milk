@@ -5,6 +5,7 @@ import {
   RefreshControl, StatusBar, Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SHADOWS, SPACING, RADIUS } from '../config/theme';
 import { getCustomerCount } from '../services/customerService';
 import { getTodaySummary } from '../services/entryService';
@@ -12,6 +13,7 @@ import { getTotalPendingAmount, getMonthlyCollected } from '../services/paymentS
 import { formatCurrency, formatLiters, getGreeting, formatDate } from '../utils/helpers';
 
 const DashboardScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({
     totalCustomers: 0,
@@ -27,7 +29,7 @@ const DashboardScreen = ({ navigation }) => {
       const [customerCount, todaySummary, pending, monthlyCollected] = await Promise.all([
         getCustomerCount(),
         getTodaySummary(),
-        getTotalPendingAmount().catch(() => 0),
+        getTotalPendingAmount(),
         getMonthlyCollected().catch(() => 0),
       ]);
 
@@ -70,7 +72,7 @@ const DashboardScreen = ({ navigation }) => {
       <StatusBar backgroundColor={COLORS.primaryDark} barStyle="light-content" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, SPACING.lg) }]}>
         <View style={styles.headerContent}>
           <View>
             <Text style={styles.greeting}>{getGreeting()} 👋</Text>

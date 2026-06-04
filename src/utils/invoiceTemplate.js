@@ -222,7 +222,7 @@ export const generateInvoiceHTML = (invoiceData, entries = [], logoDataUri = '')
     <!-- Header -->
     <div class="header">
       <div class="header-left">
-        ${logoDataUri ? `<img src="${logoDataUri}" class="logo" style="background:transparent; object-fit:contain; border-radius:0;" />` : `<div class="logo">MANJULA<br/>MILK<br/>FORMING</div>`}
+        ${logoDataUri ? `<img src="${logoDataUri}" style="width:80px; height:80px; object-fit:contain;" />` : `<div class="logo">MANJULA<br/>MILK<br/>FORMING</div>`}
         <div class="business-info">
           <h1>MANJULA<br/>MILK FORMING</h1>
           <div class="tagline">Fresh Milk, Healthy Life</div>

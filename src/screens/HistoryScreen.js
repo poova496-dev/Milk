@@ -5,6 +5,7 @@ import {
   RefreshControl, StatusBar, Modal, ScrollView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SHADOWS, SPACING, RADIUS } from '../config/theme';
 import { getDailyEntries, deleteEntry } from '../services/entryService';
 import { getCustomers } from '../services/customerService';
@@ -12,6 +13,7 @@ import { formatDate, formatTime, formatCurrency, formatLiters, getMilkTypeLabel,
 import { Alert } from 'react-native';
 
 const HistoryScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const [entries, setEntries] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -139,7 +141,7 @@ const HistoryScreen = ({ navigation }) => {
       <StatusBar backgroundColor={COLORS.primaryDark} barStyle="light-content" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, SPACING.lg) }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>

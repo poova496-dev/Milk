@@ -5,6 +5,7 @@ import {
   RefreshControl, StatusBar, Modal, ScrollView, Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SHADOWS, SPACING, RADIUS } from '../config/theme';
 import { getPaymentHistory } from '../services/paymentService';
 import { getCustomers } from '../services/customerService';
@@ -16,6 +17,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 const PaymentHistoryScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const [payments, setPayments] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -190,7 +192,7 @@ const PaymentHistoryScreen = ({ navigation }) => {
       <StatusBar backgroundColor={COLORS.primaryDark} barStyle="light-content" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, SPACING.lg) }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>

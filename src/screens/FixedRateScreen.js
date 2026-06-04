@@ -5,11 +5,13 @@ import {
   Alert, ScrollView, StatusBar, FlatList,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SHADOWS, SPACING, RADIUS } from '../config/theme';
 import { getActiveRate, getRateHistory, saveRate } from '../services/rateService';
 import { formatDate, formatCurrency, formatDateDB } from '../utils/helpers';
 
 const FixedRateScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const [activeRate, setActiveRate] = useState(null);
   const [rateHistory, setRateHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +102,7 @@ const FixedRateScreen = ({ navigation }) => {
       <StatusBar backgroundColor={COLORS.primaryDark} barStyle="light-content" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, SPACING.lg) }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>

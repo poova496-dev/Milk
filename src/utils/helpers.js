@@ -135,26 +135,29 @@ export const debounce = (func, wait) => {
 export const getLogoBase64 = async () => {
   try {
     const { Asset } = require('expo-asset');
-    const FileSystem = require('expo-file-system');
+    const FileSystem = require('expo-file-system/legacy');
     
     const asset = Asset.fromModule(require('../../assets/logo.png'));
     await asset.downloadAsync();
     
+    // Use localUri if available (usually on real devices), fallback to uri
     const fileUri = asset.localUri || asset.uri;
     
     if (fileUri) {
-      let finalUri = fileUri;
-      // If it's still an HTTP URL, download it manually
+      // If it's a remote URL (common in Expo Go dev mode), we must download it to a local file first
       if (fileUri.startsWith('http')) {
-        const tempPath = FileSystem.cacheDirectory + 'temp_logo_v2.png';
+        const tempPath = `${FileSystem.cacheDirectory}temp_logo_${Date.now()}.png`;
         const downloaded = await FileSystem.downloadAsync(fileUri, tempPath);
-        finalUri = downloaded.uri;
+        const base64 = await FileSystem.readAsStringAsync(downloaded.uri, { encoding: 'base64' });
+        return `data:image/png;base64,${base64}`;
       }
-      const base64 = await FileSystem.readAsStringAsync(finalUri, { encoding: FileSystem.EncodingType.Base64 });
+      
+      // If it's already a local file path
+      const base64 = await FileSystem.readAsStringAsync(fileUri, { encoding: 'base64' });
       return `data:image/png;base64,${base64}`;
     }
   } catch (error) {
-    console.warn('Error loading logo for PDF:', error);
+    console.error('Error loading logo for PDF:', error);
   }
   return '';
 };

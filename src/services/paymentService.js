@@ -78,45 +78,70 @@ export const getPaymentHistory = async (filters = {}) => {
  * Get pending amounts per customer
  */
 export const getPendingAmounts = async () => {
-  // Get all entries total
-  const { data: entries, error: entriesError } = await supabase
-    .from('daily_entries')
-    .select('customer_id, customer_name, total_amount');
+  try {
+    // Get all entries total
+    const { data: entries, error: entriesError } = await supabase
+      .from('daily_entries')
+      .select('customer_id, customer_name, total_amount');
 
-  if (entriesError) throw entriesError;
+    if (entriesError) throw entriesError;
 
-  // Get all payments total
-  const { data: payments, error: paymentsError } = await supabase
-    .from('payments')
-    .select('customer_id, paid_amount');
+    // Get all payments total
+    const { data: payments, error: paymentsError } = await supabase
+      .from('payments')
+      .select('customer_id, paid_amount');
 
-  if (paymentsError) throw paymentsError;
+    if (paymentsError) throw paymentsError;
 
-  // Calculate pending per customer
-  const customerTotals = {};
+    // Calculate pending per customer
+    const customerTotals = {};
 
-  (entries || []).forEach(entry => {
-    if (!customerTotals[entry.customer_id]) {
-      customerTotals[entry.customer_id] = {
-        customer_id: entry.customer_id,
-        customer_name: entry.customer_name,
-        total_entries_amount: 0,
-        total_paid: 0,
-      };
-    }
-    customerTotals[entry.customer_id].total_entries_amount += parseFloat(entry.total_amount);
-  });
+    (entries || []).forEach(entry => {
+      if (!entry.customer_id) return;
+      
+      const cid = String(entry.customer_id);
+      if (!customerTotals[cid]) {
+        customerTotals[cid] = {
+          customer_id: entry.customer_id,
+          customer_name: entry.customer_name || 'Unknown',
+          total_entries_amount: 0,
+          total_paid: 0,
+        };
+      }
+      customerTotals[cid].total_entries_amount += (parseFloat(entry.total_amount) || 0);
+    });
 
-  (payments || []).forEach(payment => {
-    if (customerTotals[payment.customer_id]) {
-      customerTotals[payment.customer_id].total_paid += parseFloat(payment.paid_amount);
-    }
-  });
+    (payments || []).forEach(payment => {
+      if (!payment.customer_id) return;
+      
+      const cid = String(payment.customer_id);
+      if (customerTotals[cid]) {
+        customerTotals[cid].total_paid += (parseFloat(payment.paid_amount) || 0);
+      } else {
+        customerTotals[cid] = {
+          customer_id: payment.customer_id,
+          customer_name: 'Unknown',
+          total_entries_amount: 0,
+          total_paid: (parseFloat(payment.paid_amount) || 0),
+        };
+      }
+    });
 
-  return Object.values(customerTotals).map(c => ({
-    ...c,
-    pending_amount: c.total_entries_amount - c.total_paid,
-  })).filter(c => c.pending_amount > 0);
+    const result = Object.values(customerTotals)
+      .map(c => {
+        const pending = c.total_entries_amount - c.total_paid;
+        return {
+          ...c,
+          pending_amount: Math.round(pending * 100) / 100,
+        };
+      })
+      .filter(c => c.pending_amount > 0.01);
+    
+    return result;
+  } catch (error) {
+    console.error('Error in getPendingAmounts:', error);
+    throw error;
+  }
 };
 
 /**

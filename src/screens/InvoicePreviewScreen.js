@@ -4,6 +4,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Alert, Dimensions, Image
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SHADOWS, SPACING, RADIUS } from '../config/theme';
 import { formatDate, formatCurrency, formatLiters, getLogoBase64 } from '../utils/helpers';
 import { generateInvoiceHTML } from '../utils/invoiceTemplate';
@@ -13,13 +14,14 @@ import * as Sharing from 'expo-sharing';
 const { width } = Dimensions.get('window');
 
 const InvoicePreviewScreen = ({ navigation, route }) => {
+  const insets = useSafeAreaInsets();
   const { invoiceData, entries = [], pdfUri } = route.params || {};
   const [loading, setLoading] = useState(false);
 
   if (!invoiceData) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, SPACING.lg) }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
@@ -88,7 +90,7 @@ const InvoicePreviewScreen = ({ navigation, route }) => {
       <StatusBar backgroundColor={COLORS.primaryDark} barStyle="light-content" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, SPACING.lg) }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>

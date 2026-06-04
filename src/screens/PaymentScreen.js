@@ -4,11 +4,12 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Alert, StatusBar, Modal, TextInput,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, SHADOWS, SPACING, RADIUS } from '../config/theme';
 import { getCustomers } from '../services/customerService';
 import { getEntriesForBilling } from '../services/entryService';
-import { getLastPaymentDate, savePayment, checkDuplicatePayment } from '../services/paymentService';
+import { getLastPaymentDate, savePayment, checkDuplicatePayment, getPendingAmounts } from '../services/paymentService';
 import { generateInvoiceNumber, saveInvoice } from '../services/invoiceService';
 import { formatDate, formatDateDB, formatCurrency, formatLiters, getLogoBase64 } from '../utils/helpers';
 import { generateInvoiceHTML } from '../utils/invoiceTemplate';
@@ -16,6 +17,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 const PaymentScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
@@ -39,13 +41,19 @@ const PaymentScreen = ({ navigation }) => {
 
   const loadCustomers = async () => {
     try {
-      const data = await getCustomers();
-      setCustomers(data);
-      if (data.length === 1) {
-        handleCustomerSelect(data[0]);
+      setLoading(true);
+      // Fetch only customers who have a pending balance
+      const pendingData = await getPendingAmounts();
+      setCustomers(pendingData);
+      
+      // If only one customer has pending balance, select them automatically
+      if (pendingData.length === 1) {
+        handleCustomerSelect(pendingData[0]);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to load customers');
+      Alert.alert('Error', 'Failed to load customers with pending collections');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -221,7 +229,7 @@ const PaymentScreen = ({ navigation }) => {
       <StatusBar backgroundColor={COLORS.primaryDark} barStyle="light-content" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, SPACING.lg) }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>

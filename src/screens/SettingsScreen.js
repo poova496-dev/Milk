@@ -4,9 +4,11 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Alert, Linking, Image,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SHADOWS, SPACING, RADIUS } from '../config/theme';
 
 const SettingsScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const handleAbout = () => {
     Alert.alert(
       'About Manjula Milk Forming',
@@ -63,7 +65,7 @@ const SettingsScreen = ({ navigation }) => {
       <StatusBar backgroundColor={COLORS.primaryDark} barStyle="light-content" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, SPACING.lg) }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
