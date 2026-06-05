@@ -6,18 +6,25 @@ import { formatDateDB } from '../utils/helpers';
  * Add daily milk entry
  */
 export const addDailyEntry = async (entryData) => {
+  const insertObj = {
+    customer_id: entryData.customer_id,
+    customer_name: entryData.customer_name,
+    entry_date: entryData.entry_date,
+    milk_type_selected: entryData.milk_type_selected,
+    quantity_liters: entryData.quantity_liters,
+    rate_per_liter_used: entryData.rate_per_liter_used,
+    total_amount: entryData.total_amount,
+    entered_by: entryData.entered_by || 'admin',
+  };
+  // Only set is_billed when explicitly provided (e.g. paid Cash/UPI orders),
+  // so normal admin entries keep working even before the column migration.
+  if (entryData.is_billed !== undefined) {
+    insertObj.is_billed = entryData.is_billed;
+  }
+
   const { data, error } = await supabase
     .from('daily_entries')
-    .insert([{
-      customer_id: entryData.customer_id,
-      customer_name: entryData.customer_name,
-      entry_date: entryData.entry_date,
-      milk_type_selected: entryData.milk_type_selected,
-      quantity_liters: entryData.quantity_liters,
-      rate_per_liter_used: entryData.rate_per_liter_used,
-      total_amount: entryData.total_amount,
-      entered_by: entryData.entered_by || 'admin',
-    }])
+    .insert([insertObj])
     .select()
     .single();
 
@@ -90,19 +97,30 @@ export const getTodaySummary = async () => {
 };
 
 /**
- * Get entries for a customer within date range (for billing)
+ * Get all entries for a customer within a date range (e.g. re-opening old invoices).
  */
-export const getEntriesForBilling = async (customerId, startDate, endDate) => {
+export const getEntriesInPeriod = async (customerId, startDate, endDate) => {
   const { data, error } = await supabase
     .from('daily_entries')
     .select('*')
     .eq('customer_id', customerId)
     .gte('entry_date', startDate)
     .lte('entry_date', endDate)
-    .order('entry_date', { ascending: true });
+    .order('entry_date', { ascending: true })
+    .order('created_at', { ascending: true });
 
   if (error) throw error;
   return data || [];
+};
+
+/**
+ * Get entries that still need billing in a date range. Excludes entries already
+ * marked billed (e.g. morning Cash/UPI order on the same day as an evening
+ * Billing order).
+ */
+export const getEntriesForBilling = async (customerId, startDate, endDate) => {
+  const all = await getEntriesInPeriod(customerId, startDate, endDate);
+  return all.filter((e) => e.is_billed !== true);
 };
 
 /**

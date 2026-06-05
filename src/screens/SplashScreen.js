@@ -22,11 +22,14 @@ const SplashScreen = ({ navigation }) => {
       }),
     ]).start();
 
-    const timer = setTimeout(() => {
-      navigation.replace('Dashboard');
-    }, 2500);
-
-    return () => clearTimeout(timer);
+    // When used inside a navigator (legacy), advance to Dashboard.
+    // When rendered as the auth-loading screen, there is no navigation prop.
+    if (navigation && typeof navigation.replace === 'function') {
+      const timer = setTimeout(() => {
+        navigation.replace('Dashboard');
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   return (

@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SHADOWS, SPACING, RADIUS } from '../config/theme';
 import { getDailyEntries, deleteEntry } from '../services/entryService';
 import { getCustomers } from '../services/customerService';
+import { getBillingPeriods } from '../services/paymentService';
 import { formatDate, formatTime, formatCurrency, formatLiters, getMilkTypeLabel, formatDateDB } from '../utils/helpers';
 import { Alert } from 'react-native';
 
@@ -43,15 +44,37 @@ const HistoryScreen = ({ navigation }) => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [customerList, entryList] = await Promise.all([
+      const [customerList, entryList, billingPeriods] = await Promise.all([
         getCustomers(true),
         getDailyEntries({
           customer_id: selectedCustomer?.customer_id || undefined,
           ...getDateFilter(),
         }),
+        getBillingPeriods(selectedCustomer?.customer_id || undefined),
       ]);
+
+      // The per-entry is_billed flag is authoritative: a "Billing" order entry
+      // is explicitly false and must stay "Not Billed" even if it falls inside
+      // an already-billed date range. Only when the flag is missing (older rows
+      // before the column existed) do we fall back to multi-day bill coverage.
+      // Single-day payments (bill_start = bill_end), e.g. Cash/UPI on delivery,
+      // are never used to flag other same-day entries.
+      const entriesWithStatus = entryList.map((entry) => {
+        if (typeof entry.is_billed === 'boolean') {
+          return { ...entry, is_billed: entry.is_billed };
+        }
+        const coveredByRangeBill = billingPeriods.some(
+          (p) =>
+            String(p.customer_id) === String(entry.customer_id) &&
+            p.bill_start_date !== p.bill_end_date &&
+            entry.entry_date >= p.bill_start_date &&
+            entry.entry_date <= p.bill_end_date
+        );
+        return { ...entry, is_billed: coveredByRangeBill };
+      });
+
       setCustomers(customerList);
-      setEntries(entryList);
+      setEntries(entriesWithStatus);
     } catch (error) {
       Alert.alert('Error', 'Failed to load history');
     } finally {
@@ -68,6 +91,7 @@ const HistoryScreen = ({ navigation }) => {
   // Summary calculations
   const totalLiters = entries.reduce((sum, e) => sum + parseFloat(e.quantity_liters), 0);
   const totalAmount = entries.reduce((sum, e) => sum + parseFloat(e.total_amount), 0);
+  const notBilledCount = entries.filter((e) => !e.is_billed).length;
 
   const handleDeleteEntry = (entry) => {
     Alert.alert(
@@ -97,9 +121,16 @@ const HistoryScreen = ({ navigation }) => {
         <View style={styles.entryCustomerBadge}>
           <Text style={styles.entryCustomerText}>{item.customer_name}</Text>
         </View>
-        <TouchableOpacity onPress={() => handleDeleteEntry(item)}>
-          <Text style={{ fontSize: 16 }}>🗑️</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <View style={[styles.statusBadge, item.is_billed ? styles.statusBilled : styles.statusNotBilled]}>
+            <Text style={[styles.statusText, item.is_billed ? styles.statusTextBilled : styles.statusTextNotBilled]}>
+              {item.is_billed ? '✓ Billed' : '● Not Billed'}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => handleDeleteEntry(item)}>
+            <Text style={{ fontSize: 16 }}>🗑️</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       <View style={styles.entryDetails}>
         <View style={styles.entryDetail}>
@@ -201,6 +232,13 @@ const HistoryScreen = ({ navigation }) => {
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Entries</Text>
           <Text style={styles.summaryValue}>{entries.length}</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>Not Billed</Text>
+          <Text style={[styles.summaryValue, { color: notBilledCount > 0 ? COLORS.errorRed : COLORS.secondary }]}>
+            {notBilledCount}
+          </Text>
         </View>
       </View>
 
@@ -364,6 +402,18 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
   },
   entryCustomerText: { fontSize: 13, fontWeight: '600', color: COLORS.primaryDark },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  statusBadge: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+  },
+  statusBilled: { backgroundColor: '#E8F5E9', borderColor: COLORS.secondary },
+  statusNotBilled: { backgroundColor: '#FFEBEE', borderColor: COLORS.errorRed },
+  statusText: { fontSize: 11, fontWeight: '700' },
+  statusTextBilled: { color: COLORS.secondary },
+  statusTextNotBilled: { color: COLORS.errorRed },
   entryDetails: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -10,7 +10,7 @@ import { COLORS, SHADOWS, SPACING, RADIUS } from '../config/theme';
 import { getPaymentHistory } from '../services/paymentService';
 import { getCustomers } from '../services/customerService';
 import { getInvoiceByPaymentId } from '../services/invoiceService';
-import { getEntriesForBilling } from '../services/entryService';
+import { getEntriesInPeriod } from '../services/entryService';
 import { formatDate, formatTime, formatCurrency, formatLiters, getLogoBase64 } from '../utils/helpers';
 import { generateInvoiceHTML } from '../utils/invoiceTemplate';
 import * as Print from 'expo-print';
@@ -54,7 +54,7 @@ const PaymentHistoryScreen = ({ navigation }) => {
         return;
       }
 
-      const entries = await getEntriesForBilling(
+      const entries = await getEntriesInPeriod(
         payment.customer_id,
         payment.bill_start_date,
         payment.bill_end_date
@@ -81,7 +81,7 @@ const PaymentHistoryScreen = ({ navigation }) => {
         return;
       }
 
-      const entries = await getEntriesForBilling(
+      const entries = await getEntriesInPeriod(
         payment.customer_id,
         payment.bill_start_date,
         payment.bill_end_date
@@ -104,7 +104,7 @@ const PaymentHistoryScreen = ({ navigation }) => {
         return;
       }
 
-      const entries = await getEntriesForBilling(
+      const entries = await getEntriesInPeriod(
         payment.customer_id,
         payment.bill_start_date,
         payment.bill_end_date

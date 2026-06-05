@@ -10,10 +10,20 @@ import { COLORS, SHADOWS, SPACING, RADIUS } from '../config/theme';
 import { getCustomerCount } from '../services/customerService';
 import { getTodaySummary } from '../services/entryService';
 import { getTotalPendingAmount, getMonthlyCollected } from '../services/paymentService';
+import { getOrderSummaryCounts } from '../services/orderService';
 import { formatCurrency, formatLiters, getGreeting, formatDate } from '../utils/helpers';
+import { useAuth } from '../context/AuthContext';
 
 const DashboardScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { signOut } = useAuth();
+
+  const confirmLogout = () => {
+    Alert.alert('Exit Seller Panel', 'Log out of the seller panel?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', style: 'destructive', onPress: () => signOut() },
+    ]);
+  };
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({
     totalCustomers: 0,
@@ -22,15 +32,18 @@ const DashboardScreen = ({ navigation }) => {
     pendingAmount: 0,
     monthCollected: 0,
     todayEntries: 0,
+    pendingToAccept: 0,
+    pendingToDeliver: 0,
   });
 
   const loadDashboardData = async () => {
     try {
-      const [customerCount, todaySummary, pending, monthlyCollected] = await Promise.all([
+      const [customerCount, todaySummary, pending, monthlyCollected, orderCounts] = await Promise.all([
         getCustomerCount(),
         getTodaySummary(),
         getTotalPendingAmount(),
         getMonthlyCollected().catch(() => 0),
+        getOrderSummaryCounts().catch(() => ({ pendingToAccept: 0, pendingToDeliver: 0 })),
       ]);
 
       setStats({
@@ -40,6 +53,8 @@ const DashboardScreen = ({ navigation }) => {
         todayEntries: todaySummary.entryCount,
         pendingAmount: pending,
         monthCollected: monthlyCollected,
+        pendingToAccept: orderCounts.pendingToAccept,
+        pendingToDeliver: orderCounts.pendingToDeliver,
       });
     } catch (error) {
       console.error('Dashboard load error:', error);
@@ -59,6 +74,7 @@ const DashboardScreen = ({ navigation }) => {
   };
 
   const quickActions = [
+    { title: 'Orders', icon: '🛒', screen: 'Orders', color: '#C62828' },
     { title: 'Add Entry', icon: '📝', screen: 'DailyEntry', color: '#2E7D32' },
     { title: 'History', icon: '📋', screen: 'History', color: '#1565C0' },
     { title: 'Payment', icon: '💰', screen: 'Payment', color: '#E65100' },
@@ -78,9 +94,9 @@ const DashboardScreen = ({ navigation }) => {
             <Text style={styles.greeting}>{getGreeting()} 👋</Text>
             <Text style={styles.businessName}>Manjula Milk Forming</Text>
           </View>
-          <View style={styles.headerLogoCircle}>
-            <Text style={styles.headerLogoText}>🥛</Text>
-          </View>
+          <TouchableOpacity onPress={confirmLogout} style={styles.logoutBtn} activeOpacity={0.7}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
         </View>
         <Text style={styles.dateText}>📅 {formatDate(new Date())}</Text>
       </View>
@@ -129,6 +145,32 @@ const DashboardScreen = ({ navigation }) => {
             </Text>
             <Text style={styles.cardLabel}>This Month Collected</Text>
           </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>Orders Summary</Text>
+        <View style={styles.cardRow}>
+          <TouchableOpacity
+            style={[styles.statCard, { backgroundColor: '#FFF8E1' }]}
+            onPress={() => navigation.navigate('Orders', { initialTab: 'pending' })}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.cardIcon}>🆕</Text>
+            <Text style={[styles.cardValue, stats.pendingToAccept > 0 && { color: '#E65100' }]}>
+              {stats.pendingToAccept}
+            </Text>
+            <Text style={styles.cardLabel}>To Accept</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.statCard, { backgroundColor: '#E1F5FE' }]}
+            onPress={() => navigation.navigate('Orders', { initialTab: 'accepted' })}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.cardIcon}>🚚</Text>
+            <Text style={[styles.cardValue, stats.pendingToDeliver > 0 && { color: '#1565C0' }]}>
+              {stats.pendingToDeliver}
+            </Text>
+            <Text style={styles.cardLabel}>To Deliver</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Quick Actions */}
@@ -203,6 +245,18 @@ const styles = StyleSheet.create({
   },
   headerLogoText: {
     fontSize: 24,
+  },
+  logoutBtn: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  logoutText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: '600',
   },
   dateText: {
     fontSize: 12,

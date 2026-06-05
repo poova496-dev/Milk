@@ -41,6 +41,31 @@ export const savePayment = async (paymentData) => {
     .single();
 
   if (error) throw error;
+
+  // Mark only the entries included in this bill as billed. Never re-mark
+  // entries already billed earlier the same day (e.g. morning Cash/UPI).
+  if (paymentData.markEntriesBilled !== false) {
+    try {
+      if (paymentData.entry_ids?.length) {
+        await supabase
+          .from('daily_entries')
+          .update({ is_billed: true })
+          .in('entry_id', paymentData.entry_ids)
+          .eq('is_billed', false);
+      } else {
+        await supabase
+          .from('daily_entries')
+          .update({ is_billed: true })
+          .eq('customer_id', paymentData.customer_id)
+          .eq('is_billed', false)
+          .gte('entry_date', paymentData.bill_start_date)
+          .lte('entry_date', paymentData.bill_end_date);
+      }
+    } catch (e) {
+      // Non-fatal: if the is_billed column is missing, payment still succeeds.
+    }
+  }
+
   return data;
 };
 
@@ -75,73 +100,66 @@ export const getPaymentHistory = async (filters = {}) => {
 };
 
 /**
- * Get pending amounts per customer
+ * Get pending amounts per customer — sum of milk entries that are not yet
+ * billed (is_billed !== true). Matches Entry History "Not Billed" status and
+ * is not reduced by Cash/UPI payments or overlapping bill records.
  */
 export const getPendingAmounts = async () => {
   try {
-    // Get all entries total
     const { data: entries, error: entriesError } = await supabase
       .from('daily_entries')
-      .select('customer_id, customer_name, total_amount');
+      .select('customer_id, customer_name, total_amount, is_billed');
 
     if (entriesError) throw entriesError;
 
-    // Get all payments total
-    const { data: payments, error: paymentsError } = await supabase
-      .from('payments')
-      .select('customer_id, paid_amount');
-
-    if (paymentsError) throw paymentsError;
-
-    // Calculate pending per customer
     const customerTotals = {};
 
-    (entries || []).forEach(entry => {
-      if (!entry.customer_id) return;
-      
+    (entries || []).forEach((entry) => {
+      if (!entry.customer_id || entry.is_billed === true) return;
+
       const cid = String(entry.customer_id);
       if (!customerTotals[cid]) {
         customerTotals[cid] = {
           customer_id: entry.customer_id,
           customer_name: entry.customer_name || 'Unknown',
-          total_entries_amount: 0,
-          total_paid: 0,
+          pending_amount: 0,
         };
       }
-      customerTotals[cid].total_entries_amount += (parseFloat(entry.total_amount) || 0);
+      customerTotals[cid].pending_amount += (parseFloat(entry.total_amount) || 0);
     });
 
-    (payments || []).forEach(payment => {
-      if (!payment.customer_id) return;
-      
-      const cid = String(payment.customer_id);
-      if (customerTotals[cid]) {
-        customerTotals[cid].total_paid += (parseFloat(payment.paid_amount) || 0);
-      } else {
-        customerTotals[cid] = {
-          customer_id: payment.customer_id,
-          customer_name: 'Unknown',
-          total_entries_amount: 0,
-          total_paid: (parseFloat(payment.paid_amount) || 0),
-        };
-      }
-    });
-
-    const result = Object.values(customerTotals)
-      .map(c => {
-        const pending = c.total_entries_amount - c.total_paid;
-        return {
-          ...c,
-          pending_amount: Math.round(pending * 100) / 100,
-        };
-      })
-      .filter(c => c.pending_amount > 0.01);
-    
-    return result;
+    return Object.values(customerTotals)
+      .map((c) => ({
+        ...c,
+        pending_amount: Math.round(c.pending_amount * 100) / 100,
+      }))
+      .filter((c) => c.pending_amount > 0.01);
   } catch (error) {
     console.error('Error in getPendingAmounts:', error);
     throw error;
   }
+};
+
+/**
+ * Get the pending (not yet billed) balance for a single customer.
+ * @param {string} customerId
+ * @returns {Promise<number>} pending amount (>= 0)
+ */
+export const getCustomerPending = async (customerId) => {
+  if (!customerId) return 0;
+
+  const { data: entries, error } = await supabase
+    .from('daily_entries')
+    .select('total_amount, is_billed')
+    .eq('customer_id', customerId);
+
+  if (error) throw error;
+
+  const pending = (entries || [])
+    .filter((e) => e.is_billed !== true)
+    .reduce((s, e) => s + (parseFloat(e.total_amount) || 0), 0);
+
+  return Math.round(pending * 100) / 100;
 };
 
 /**
@@ -162,18 +180,49 @@ export const getMonthlyCollected = async () => {
 };
 
 /**
- * Check for duplicate payment in same billing range
+ * Check whether the requested billing range OVERLAPS any existing bill for
+ * this customer. This catches re-billing of a period (or part of a period)
+ * that has already been invoiced, even when the start/end dates are not an
+ * exact match.
+ *
+ * Two ranges [s1,e1] and [s2,e2] overlap when: s1 <= e2 AND e1 >= s2.
+ *
+ * @returns {Object|null} The first conflicting payment (with its dates) or
+ *   null when no existing bill overlaps the requested range.
  */
 export const checkDuplicatePayment = async (customerId, startDate, endDate) => {
   const { data, error } = await supabase
     .from('payments')
-    .select('payment_id')
+    .select('payment_id, bill_start_date, bill_end_date, paid_amount, payment_date')
     .eq('customer_id', customerId)
-    .eq('bill_start_date', startDate)
-    .eq('bill_end_date', endDate);
+    .lte('bill_start_date', endDate)
+    .gte('bill_end_date', startDate)
+    .order('bill_end_date', { ascending: false })
+    .limit(1);
 
   if (error) throw error;
-  return (data || []).length > 0;
+  return (data && data.length > 0) ? data[0] : null;
+};
+
+/**
+ * Get all billing periods (from saved payments). Used to determine whether a
+ * daily entry has already been billed.
+ *
+ * @param {string|number} [customerId] Optional - limit to one customer.
+ * @returns {Array<{customer_id, bill_start_date, bill_end_date}>}
+ */
+export const getBillingPeriods = async (customerId) => {
+  let query = supabase
+    .from('payments')
+    .select('customer_id, bill_start_date, bill_end_date');
+
+  if (customerId) {
+    query = query.eq('customer_id', customerId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
 };
 
 /**

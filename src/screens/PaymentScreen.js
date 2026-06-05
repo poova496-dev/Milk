@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, SHADOWS, SPACING, RADIUS } from '../config/theme';
 import { getCustomers } from '../services/customerService';
 import { getEntriesForBilling } from '../services/entryService';
-import { getLastPaymentDate, savePayment, checkDuplicatePayment, getPendingAmounts } from '../services/paymentService';
+import { savePayment, getPendingAmounts } from '../services/paymentService';
 import { generateInvoiceNumber, saveInvoice } from '../services/invoiceService';
 import { formatDate, formatDateDB, formatCurrency, formatLiters, getLogoBase64 } from '../utils/helpers';
 import { generateInvoiceHTML } from '../utils/invoiceTemplate';
@@ -63,20 +63,17 @@ const PaymentScreen = ({ navigation }) => {
     setCalculated(false);
 
     try {
-      // Get last payment date to determine bill start
-      const lastPaidDate = await getLastPaymentDate(customer.customer_id);
-      if (lastPaidDate) {
-        const nextDay = new Date(lastPaidDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-        setStartDate(nextDay);
+      // Start from the earliest unbilled entry (not "day after last payment"),
+      // so same-day evening billing after a morning Cash/UPI order still works.
+      const unbilledEntries = await getEntriesForBilling(
+        customer.customer_id,
+        '2000-01-01',
+        formatDateDB(new Date())
+      );
+      if (unbilledEntries.length > 0) {
+        setStartDate(new Date(unbilledEntries[0].entry_date));
       } else {
-        // No previous payments, get earliest entry date
-        const allEntries = await getEntriesForBilling(customer.customer_id, '2000-01-01', formatDateDB(new Date()));
-        if (allEntries.length > 0) {
-          setStartDate(new Date(allEntries[0].entry_date));
-        } else {
-          setStartDate(new Date());
-        }
+        setStartDate(new Date());
       }
       setEndDate(new Date());
     } catch (error) {
@@ -94,6 +91,16 @@ const PaymentScreen = ({ navigation }) => {
         formatDateDB(startDate),
         formatDateDB(endDate)
       );
+
+      if (billEntries.length === 0) {
+        Alert.alert(
+          'No Unbilled Entries',
+          'Nothing to bill in this period. Entries already billed today (e.g. morning Cash/UPI) are not included again.'
+        );
+        setEntries([]);
+        setCalculated(false);
+        return;
+      }
 
       setEntries(billEntries);
       const liters = billEntries.reduce((sum, e) => sum + parseFloat(e.quantity_liters), 0);
@@ -127,7 +134,10 @@ const PaymentScreen = ({ navigation }) => {
 
   const handlePayment = async () => {
     if (!calculated || entries.length === 0) {
-      Alert.alert('No Bill', 'Please calculate the bill first');
+      Alert.alert(
+        'No Bill',
+        'Please calculate the bill first. Only unbilled entries are included — already-billed same-day orders are skipped.'
+      );
       return;
     }
 
@@ -137,25 +147,9 @@ const PaymentScreen = ({ navigation }) => {
       return;
     }
 
-    // Check for duplicate
-    const isDuplicate = await checkDuplicatePayment(
-      selectedCustomer.customer_id,
-      formatDateDB(startDate),
-      formatDateDB(endDate)
-    );
-
-    if (isDuplicate) {
-      Alert.alert(
-        'Duplicate Payment',
-        'A payment already exists for this billing period. Continue anyway?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Continue', onPress: () => processPayment(paid) },
-        ]
-      );
-    } else {
-      processPayment(paid);
-    }
+    // Bill only the unbilled entries shown (e.g. evening order only, not morning
+    // Cash/UPI). is_billed prevents charging the same entry twice.
+    processPayment(paid);
   };
 
   const processPayment = async (paid) => {
@@ -175,6 +169,7 @@ const PaymentScreen = ({ navigation }) => {
         paid_amount: paid,
         payment_method: paymentMethod,
         notes: notes,
+        entry_ids: entries.map((e) => e.entry_id),
       });
 
       // Save invoice
@@ -425,7 +420,6 @@ const PaymentScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
-      
       {/* Success Modal */}
       <Modal visible={!!successData} transparent animationType="fade">
         <View style={styles.modalOverlay}>

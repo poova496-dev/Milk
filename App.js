@@ -2,6 +2,7 @@
 import React from 'react';
 import { LogBox } from 'react-native';
 import AppNavigator from './src/navigation/AppNavigator';
+import { AuthProvider } from './src/context/AuthContext';
 
 // Suppress non-critical warnings in development
 LogBox.ignoreLogs([
@@ -10,5 +11,9 @@ LogBox.ignoreLogs([
 ]);
 
 export default function App() {
-  return <AppNavigator />;
+  return (
+    <AuthProvider>
+      <AppNavigator />
+    </AuthProvider>
+  );
 }
